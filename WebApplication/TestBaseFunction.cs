@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
 using Remotion.Web.ExecutionEngine;
 
@@ -20,11 +21,11 @@ namespace WebApplication
       catch (ThreadAbortException)
       {
       }
-      //finally
-      //{
-      //  // Prevent optimization
-      //  Trace.Assert (context != null);
-      //}
+      finally
+      {
+        // Prevent optimization
+        Trace.Assert (context != null);
+      }
     }
   }
 }
