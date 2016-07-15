@@ -1,10 +1,11 @@
 ﻿using System;
+using System.Web.UI;
+using System.Web.UI.WebControls;
 using Remotion.Web.ExecutionEngine;
-using Remotion.Web.UI.Controls;
 
 namespace WebApplication
 {
-  public class TestLinkButton : WebLinkButton
+  public class TestLinkButton : LinkButton
   {
     public TestLinkButton ()
     {
