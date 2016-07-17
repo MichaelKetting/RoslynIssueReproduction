@@ -15,12 +15,9 @@
 // along with re-motion; if not, see http://www.gnu.org/licenses.
 // 
 using System;
-using System.Linq;
 using System.Text;
 using System.Threading;
-using JetBrains.Annotations;
 using Remotion.Utilities;
-using Remotion.Web.ExecutionEngine.Infrastructure;
 
 namespace Remotion.Web.ExecutionEngine
 {
@@ -28,212 +25,52 @@ namespace Remotion.Web.ExecutionEngine
   /// The new <see cref="WxeFunction"/>. Will replace the <see cref="WxeFunction"/> type once implemtation is completed.
   /// </summary>
   [Serializable]
-  public abstract class WxeFunction : WxeStepList, IWxeFunctionExecutionContext
+  public abstract class WxeFunction : WxeStep
   {
-    private IWxeFunctionExecutionListener _executionListener = NullExecutionListener.Null;
-    private TransactionStrategyBase _transactionStrategy;
-    private ITransactionMode _transactionMode;
-    private readonly WxeExceptionHandler _exceptionHandler = new WxeExceptionHandler ();
-    private string _functionToken;
-    private string _returnUrl;
-    private string _executionCompletedScript;
+    private readonly WxePageStep _pageStep;
 
-    protected WxeFunction (ITransactionMode transactionMode, params object[] actualParameters)
+    private int _executingStep = 0;
+
+    protected WxeFunction (WxePageStep pageStep)
     {
-      ArgumentUtility.CheckNotNull ("transactionMode", transactionMode);
-      ArgumentUtility.CheckNotNull ("actualParameters", actualParameters);
+      ArgumentUtility.CheckNotNull ("step", (WxeStep) pageStep);
 
-      _transactionMode = transactionMode;
+      _pageStep = pageStep;
+      pageStep.SetParentStep (this);
     }
 
-    protected WxeFunction (ITransactionMode transactionMode, object[] parameterDeclarations, object[] actualParameters)
-    {
-      ArgumentUtility.CheckNotNull ("transactionMode", transactionMode);
-      ArgumentUtility.CheckNotNull ("parameterDeclarations", parameterDeclarations);
-      ArgumentUtility.CheckNotNull ("actualParameters", actualParameters);
-
-      _transactionMode = transactionMode;
-    }
-
-    public override void Execute (WxeContext context)
+    public virtual void Execute (WxeContext context)
     {
       ArgumentUtility.CheckNotNull ("context", context);
-      Assertion.IsNotNull (_executionListener);
-
-      if (!IsExecutionStarted)
-      {
-        _transactionStrategy = _transactionMode.CreateTransactionStrategy (this, context);
-        Assertion.IsNotNull (_transactionStrategy);
-
-        _executionListener = _transactionStrategy.CreateExecutionListener (_executionListener);
-        Assertion.IsNotNull (_executionListener);
-      }
 
       try
       {
-        _executionListener.OnExecutionPlay (context);
-        base.Execute (context);
-        _executionListener.OnExecutionStop (context);
-      }
-      catch (WxeFatalExecutionException)
-      {
-        // bubble up
-        throw;
+        while (_executingStep < 1)
+        {
+          _pageStep.Execute (context);
+          _executingStep++;
+        }
       }
       catch (ThreadAbortException)
       {
-        _executionListener.OnExecutionPause (context);
+        OnExecutionPause ();
         throw;
       }
-      catch (Exception stepException)
-      {
-        try
-        {
-          _executionListener.OnExecutionFail (context, stepException);
-        }
-        catch (Exception listenerException)
-        {
-          throw new WxeFatalExecutionException (stepException, listenerException);
-        }
-
-        var unwrappedException = WxeHttpExceptionPreservingException.GetUnwrappedException (stepException) ?? stepException;
-        if (!_exceptionHandler.Catch (unwrappedException))
-        {
-          throw new WxeUnhandledException (
-              string.Format ("An exception ocured while executing WxeFunction '{0}'.", GetType().FullName),
-              stepException);
-        }
-      }
     }
 
-    public ITransactionStrategy Transaction
-    {
-      get { return TransactionStrategy; }
-    }
-
-    protected internal TransactionStrategyBase TransactionStrategy
-    {
-      get { return _transactionStrategy ?? NullTransactionStrategy.Null; }
-    }
-
-    protected ITransactionMode TransactionMode
-    {
-      get { return _transactionMode; }
-    }
-
-    protected void SetTransactionMode (ITransactionMode transactionMode)
-    {
-      ArgumentUtility.CheckNotNull ("transactionMode", transactionMode);
-
-      if (_transactionStrategy != null)
-        throw new InvalidOperationException ("The TransactionMode cannot be set after the TransactionStrategy has been initialized.");
-
-      _transactionMode = transactionMode;
-    }
-
-    protected IWxeFunctionExecutionListener ExecutionListener
-    {
-      get { return _executionListener; }
-    }
-
-    protected void SetExecutionListener (IWxeFunctionExecutionListener executionListener)
-    {
-      ArgumentUtility.CheckNotNull ("executionListener", executionListener);
-
-      if (_transactionStrategy != null)
-        throw new InvalidOperationException ("The ExecutionListener cannot be set after the TransactionStrategy has been initialized.");
-
-      _executionListener = executionListener;
-    }
-
-    object[] IWxeFunctionExecutionContext.GetInParameters ()
-    {
-      return new object[0];
-    }
-
-    object[] IWxeFunctionExecutionContext.GetOutParameters ()
-    {
-      return new object[0];
-    }
-
-    object[] IWxeFunctionExecutionContext.GetVariables ()
-    {
-      return new object[0];
-    }
-
-    /// <summary>
-    /// Gets or sets the URL the browser will be redirected to after the <see cref="WxeFunction"/> has finished executing.
-    /// </summary>
-    /// <remarks>
-    /// If an <see cref="ExecutionCompletedScript"/> is set on the same <see cref="WxeFunction"/>, the <see cref="ReturnUrl"/> will not be used.
-    /// </remarks>
-    [CanBeNull]
-    public string ReturnUrl
-    {
-      get { return _returnUrl; }
-      set
-      {
-        if (value != null && value.StartsWith ("javascript:", StringComparison.OrdinalIgnoreCase))
-        {
-          throw new ArgumentException (
-              "The ReturnUrl cannot be a javascript-URL. Use the WxeFunction.SetExecutionCompletedScript(script) method instead.",
-              "value");
-        }
-
-        _returnUrl = value;
-      }
-    }
-
-    [CanBeNull]
-    public string ExecutionCompletedScript
-    {
-      get { return _executionCompletedScript; }
-    }
-
-    /// <summary>
-    /// Sets the script that will be executed when the <see cref="WxeFunction"/> as completed the execution.
-    /// </summary>
-    /// <remarks>The <paramref name="script"/> will supersede any <see cref="ReturnUrl"/> set on the same <see cref="WxeFunction"/>.</remarks>
-    public void SetExecutionCompletedScript ([NotNull] string script)
-    {
-      ArgumentUtility.CheckNotNullOrEmpty ("script", script);
-
-      _returnUrl = null;
-      _executionCompletedScript = script;
-    }
-
-    public WxeExceptionHandler ExceptionHandler
-    {
-      get { return _exceptionHandler; }
-    }
-
-    public string FunctionToken
+    public WxeStep ExecutingStep
     {
       get
       {
-        if (_functionToken != null)
-          return _functionToken;
-        WxeFunction rootFunction = RootFunction;
-        if (rootFunction != null && rootFunction != this)
-          return rootFunction.FunctionToken;
-        throw new InvalidOperationException (
-            "The WxeFunction does not have a RootFunction, i.e. the top-most WxeFunction does not have a FunctionToken.");
+        if (_executingStep < 1)
+          return _pageStep.ExecutingStep;
+        else
+          return this;
       }
     }
 
-    internal void SetFunctionToken (string functionToken)
+    private void OnExecutionPause ()
     {
-      ArgumentUtility.CheckNotNullOrEmpty ("functionToken", functionToken);
-      _functionToken = functionToken;
-    }
-
-    public override string ToString ()
-    {
-      StringBuilder sb = new StringBuilder ();
-      sb.Append ("WxeFunction: ");
-      sb.Append (GetType ().Name);
-
-      return sb.ToString ();
     }
   }
 }

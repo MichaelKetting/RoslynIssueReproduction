@@ -25,22 +25,19 @@ namespace Remotion.Web.ExecutionEngine.Infrastructure.WxePageStepExecutionStates
   //NotSerializable
   public class PreProcessingSubFunctionStateParameters : IExecutionStateParameters
   {
-    private readonly IWxePage _page;
+    private readonly WxePage _page;
     private readonly WxeFunction _subFunction;
-    private readonly WxePermaUrlOptions _permaUrlOptions;
 
-    public PreProcessingSubFunctionStateParameters (IWxePage page, WxeFunction subFunction, WxePermaUrlOptions permaUrlOptions)
+    public PreProcessingSubFunctionStateParameters (WxePage page, WxeFunction subFunction)
     {
       ArgumentUtility.CheckNotNull ("page", page);
       ArgumentUtility.CheckNotNull ("subFunction", subFunction);
-      ArgumentUtility.CheckNotNull ("permaUrlOptions", permaUrlOptions);
 
       _page = page;
       _subFunction = subFunction;
-      _permaUrlOptions = permaUrlOptions;
     }
 
-    public IWxePage Page
+    public WxePage Page
     {
       get { return _page; }
     }
@@ -48,11 +45,6 @@ namespace Remotion.Web.ExecutionEngine.Infrastructure.WxePageStepExecutionStates
     public WxeFunction SubFunction
     {
       get { return _subFunction; }
-    }
-
-    public WxePermaUrlOptions PermaUrlOptions
-    {
-      get { return _permaUrlOptions; }
     }
   }
 }

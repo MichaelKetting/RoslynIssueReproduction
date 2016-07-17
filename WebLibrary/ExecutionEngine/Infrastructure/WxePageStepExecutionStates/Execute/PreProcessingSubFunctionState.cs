@@ -17,31 +17,19 @@
 using System;
 using System.Collections.Specialized;
 using System.Web.UI;
-using Remotion.Utilities;
-using Remotion.Web.Utilities;
 
 namespace Remotion.Web.ExecutionEngine.Infrastructure.WxePageStepExecutionStates.Execute
 {
-  /// <summary>
-  /// The <see cref="PreProcessingSubFunctionState"/> is responsible for setting up the current <see cref="WxeStep"/> to execute the sub-function.
-  /// Executing this state will transition the <see cref="IExecutionStateContext"/> into the <see cref="PreparingRedirectToSubFunctionState"/> if the
-  /// sub-function has a perma-URL and into the <see cref="ExecutingSubFunctionWithoutPermaUrlState"/> otherwise.
-  /// </summary>
   //NotSerializable
   public class PreProcessingSubFunctionState : ExecutionStateBase<PreProcessingSubFunctionStateParameters>
   {
-    private readonly WxeRepostOptions _repostOptions;
+    private readonly Control _sender;
 
     public PreProcessingSubFunctionState (
-        IExecutionStateContext executionStateContext, PreProcessingSubFunctionStateParameters parameters, WxeRepostOptions repostOptions)
+        IExecutionStateContext executionStateContext, PreProcessingSubFunctionStateParameters parameters, Control sender)
         : base (executionStateContext, parameters)
     {
-      _repostOptions = repostOptions;
-    }
-
-    public WxeRepostOptions RepostOptions
-    {
-      get { return _repostOptions; }
+      _sender = sender;
     }
 
     public override void ExecuteSubFunction (WxeContext context)
@@ -50,45 +38,22 @@ namespace Remotion.Web.ExecutionEngine.Infrastructure.WxePageStepExecutionStates
       NameValueCollection postBackCollection = BackupPostBackCollection();
       EnsureSenderPostBackRegistration (postBackCollection);
 
-      Parameters.Page.SaveAllState ();
-
-      if (Parameters.PermaUrlOptions.UsePermaUrl)
-      {
-        throw new NotImplementedException();
-        //var parameters = new PreparingRedirectToSubFunctionStateParameters (Parameters.SubFunction, postBackCollection, Parameters.PermaUrlOptions);
-        //ExecutionStateContext.SetExecutionState (new PreparingRedirectToSubFunctionState (ExecutionStateContext, parameters));
-      }
-      else
-      {
-        var parameters = new ExecutionStateParameters (Parameters.SubFunction, postBackCollection);
-        ExecutionStateContext.SetExecutionState (new ExecutingSubFunctionWithoutPermaUrlState (ExecutionStateContext, parameters));
-      }
+      Parameters.Page.SaveAllState();
+      var parameters = new ExecutionStateParameters (Parameters.SubFunction, postBackCollection);
+      ExecutionStateContext.SetExecutionState (new ExecutingSubFunctionWithoutPermaUrlState (ExecutionStateContext, parameters));
     }
 
     private NameValueCollection BackupPostBackCollection ()
     {
       var postBackCollection = new NameValueCollection (Parameters.Page.GetPostBackCollection());
 
-      if (_repostOptions.SuppressesRepost)
-      {
-        if (_repostOptions.UsesEventTarget)
-        {
-          postBackCollection.Remove (Page.postEventSourceID);
-          postBackCollection.Remove (Page.postEventArgumentID);
-        }
-        else
-          postBackCollection.Remove (_repostOptions.Sender.UniqueID);
-      }
       return postBackCollection;
     }
 
     private void EnsureSenderPostBackRegistration (NameValueCollection postBackCollection)
     {
-      if (_repostOptions.SuppressesRepost)
-        return;
-
-      if (_repostOptions.Sender is IPostBackDataHandler && postBackCollection[_repostOptions.Sender.UniqueID] == null)
-        ((Page)Parameters.Page).RegisterRequiresPostBack (_repostOptions.Sender);
+      if (_sender is IPostBackDataHandler && postBackCollection[_sender.UniqueID] == null)
+        Parameters.Page.RegisterRequiresPostBack (_sender);
     }
   }
 }

@@ -20,26 +20,19 @@ using System.ComponentModel;
 using System.IO;
 using System.Web.UI;
 using Remotion.Utilities;
-using Remotion.Web.ExecutionEngine.Infrastructure;
 using Remotion.Web.ExecutionEngine.Infrastructure.WxePageStepExecutionStates;
 using Remotion.Web.ExecutionEngine.Infrastructure.WxePageStepExecutionStates.Execute;
 
 namespace Remotion.Web.ExecutionEngine
 {
-  /// <summary> This step interrupts the server side execution to display a page to the user. </summary>
-  /// <include file='..\doc\include\ExecutionEngine\WxePageStep.xml' path='WxePageStep/Class/*' />
   [Serializable]
   public class WxePageStep : WxeStep, IExecutionStateContext
   {
-    private IWxePageExecutor _pageExecutor = new WxePageExecutor();
-    private readonly ResourceObjectBase _page;
-    private readonly string _pageToken;
+    private readonly string _page;
     private string _pageState;
     private bool _isPostBack;
-    private bool _isOutOfSequencePostBack;
     private bool _isExecutionStarted;
     private bool _isReturningPostBack;
-    private WxeFunction _returningFunction;
     private NameValueCollection _postBackCollection;
 
     [NonSerialized]
@@ -47,30 +40,14 @@ namespace Remotion.Web.ExecutionEngine
 
     private IExecutionState _executionState = NullExecutionState.Null;
 
-    /// <summary> Initializes a new instance of the <b>WxePageStep</b> type. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxePageStep.xml' path='WxePageStep/Ctor/param[@name="page"]' />
     public WxePageStep (string page)
-      : this (new ResourceObject (ArgumentUtility.CheckNotNullOrEmpty("page", page)))
     {
-    }
-
-    protected WxePageStep (ResourceObjectBase page)
-    {
-      ArgumentUtility.CheckNotNull ("page", page);
+      ArgumentUtility.CheckNotNullOrEmpty ("page", page);
 
       _page = page;
-      _pageToken = Guid.NewGuid().ToString();
    }
 
-    /// <summary> The URL of the page to be displayed by this <see cref="WxePageStep"/>. </summary>
-    public string Page
-    {
-      get { return _page.GetResourcePath (); }
-    }
-
-    /// <summary> Gets the currently executing <see cref="WxeStep"/>. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxePageStep.xml' path='WxePageStep/ExecutingStep/*' />
-    public override WxeStep ExecutingStep
+    public WxeStep ExecutingStep
     {
       get
       {
@@ -81,12 +58,7 @@ namespace Remotion.Web.ExecutionEngine
       }
     }
 
-    /// <summary> 
-    ///   Displays the <see cref="WxePageStep"/>'s page or the sub-function that has been invoked by the 
-    ///   <see cref="ExecuteFunction(Infrastructure.WxePageStepExecutionStates.PreProcessingSubFunctionStateParameters,Infrastructure.WxeRepostOptions)"/> method.
-    /// </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxePageStep.xml' path='WxePageStep/Execute/*' />
-    public override void Execute (WxeContext context)
+    public void Execute (WxeContext context)
     {
       ArgumentUtility.CheckNotNull ("context", context);
 
@@ -106,93 +78,49 @@ namespace Remotion.Web.ExecutionEngine
         _isPostBack = true;
       }
 
-      ClearIsOutOfSequencePostBack();
       ClearReturnState();
 
       while (_executionState.IsExecuting)
         _executionState.ExecuteSubFunction (context);
 
+      WxeHandler wxeHandlerBackUp = context.HttpContext.Handler as WxeHandler;
+      Assertion.IsNotNull (wxeHandlerBackUp, "The HttpHandler must be of type WxeHandler.");
       try
       {
-        _pageExecutor.ExecutePage (context, Page, _isPostBack);
+        context.HttpContext.Server.Transfer (_page, _isPostBack);
       }
       finally
       {
-        ClearIsOutOfSequencePostBack();
+        context.HttpContext.Handler = wxeHandlerBackUp;
         ClearReturnState();
       }
     }
 
     [EditorBrowsable (EditorBrowsableState.Never)]
-    public void ExecuteFunction (PreProcessingSubFunctionStateParameters parameters, WxeRepostOptions repostOptions)
+    public void ExecuteFunction (PreProcessingSubFunctionStateParameters parameters, Control sender)
     {
       ArgumentUtility.CheckNotNull ("parameters", parameters);
-      ArgumentUtility.CheckNotNull ("repostOptions", repostOptions);
+      // sender can be null
 
       if (_executionState.IsExecuting)
         throw new InvalidOperationException ("Cannot execute function while another function executes.");
 
       _wxeHandler = parameters.Page.WxeHandler;
 
-      _executionState = new PreProcessingSubFunctionState (this, parameters, repostOptions);
-      Execute();
+      _executionState = new PreProcessingSubFunctionState (this, parameters, sender);
+      Execute (WxeContext.Current);
     }
 
-    /// <summary> Gets the token for this page step. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxePageStep.xml' path='WxePageStep/PageToken/*' />
-    public string PageToken
-    {
-      get { return _pageToken; }
-    }
-
-    /// <summary>
-    ///   Gets a flag that corresponds to the <see cref="System.Web.UI.Page.IsPostBack">Page.IsPostBack</see> flag, but is 
-    ///   available from the beginning of the execution cycle, i.e. even before <b>OnInit</b>.
-    /// </summary>
     public bool IsPostBack
     {
       get { return _isPostBack; }
     }
 
-    /// <summary>
-    ///   Gets a flag that describes whether the current postback cycle was caused by resubmitting a page from the 
-    ///   client's cache.
-    /// </summary>
-    public bool IsOutOfSequencePostBack
-    {
-      get { return _isOutOfSequencePostBack; }
-    }
-
-    /// <summary>
-    ///   During the execution of a page, specifies whether the current postback cycle was caused by returning from a 
-    ///   <see cref="WxeFunction"/>.
-    /// </summary>
     public bool IsReturningPostBack
     {
       get { return _isReturningPostBack; }
     }
 
-    public WxeFunction ReturningFunction
-    {
-      get { return _returningFunction; }
-    }
-
-    /// <summary> Gets or sets the postback data for the page if it has executed a sub-function. </summary>
-    /// <value> The postback data generated during the roundtrip that led to the execution of the sub-function. </value>
-    /// <remarks> 
-    ///   <para>
-    ///     This property is used only for transfering the postback data from the backup location to the page's
-    ///     initialization infrastructure.
-    ///   </para><para>
-    ///     Application developers should only use the 
-    ///     <see cref="ISmartPage.GetPostBackCollection">ISmartPage.GetPostBackCollection</see> method to access the
-    ///     postback data.
-    ///   </para><para>
-    ///     Control developers should either implement <see cref="System.Web.UI.IPostBackDataHandler"/> to access 
-    ///     postback data relevant to their control or, if they develop a composite control, use the child controls' 
-    ///     integrated data handling features to access the data.
-    ///   </para>
-    /// </remarks>
     public NameValueCollection PostBackCollection
     {
       get { return _postBackCollection; }
@@ -207,31 +135,14 @@ namespace Remotion.Web.ExecutionEngine
     {
       ArgumentUtility.CheckNotNull ("returningFunction", returningFunction);
 
-      _returningFunction = returningFunction;
       _isReturningPostBack = isReturningPostBack;
       _postBackCollection = previousPostBackCollection;
     }
 
     private void ClearReturnState ()
     {
-      _returningFunction = null;
       _isReturningPostBack = false;
       _postBackCollection = null;
-    }
-
-    public void SetIsOutOfSequencePostBack (bool value)
-    {
-      _isOutOfSequencePostBack = value;
-    }
-    
-    private void ClearIsOutOfSequencePostBack ()
-    {
-      _isOutOfSequencePostBack = false;
-    }
-
-    public override string ToString ()
-    {
-      return "WxePageStep: " + Page;
     }
 
     /// <summary> Saves the passed <paramref name="state"/> object into the <see cref="WxePageStep"/>. </summary>
@@ -252,29 +163,6 @@ namespace Remotion.Web.ExecutionEngine
     {
       LosFormatter formatter = new LosFormatter();
       return formatter.Deserialize (_pageState);
-    }
-
-    /// <summary> 
-    ///   Aborts the <see cref="WxePageStep"/>. Aborting will cascade to any <see cref="WxeFunction"/> executed
-    ///   in the scope of this step if they are part of the same hierarchy, i.e. share a common <see cref="WxeStep.RootFunction"/>.
-    /// </summary>
-    protected override void AbortRecursive ()
-    {
-      base.AbortRecursive();
-      if (_executionState.IsExecuting && _executionState.Parameters.SubFunction.RootFunction == this.RootFunction)
-        _executionState.Parameters.SubFunction.Abort();
-    }
-
-    public IWxePageExecutor PageExecutor
-    {
-      get { return _pageExecutor; }
-    }
-
-    [EditorBrowsable (EditorBrowsableState.Never)]
-    public void SetPageExecutor (IWxePageExecutor pageExecutor)
-    {
-      ArgumentUtility.CheckNotNull ("pageExecutor", pageExecutor);
-      _pageExecutor = pageExecutor;
     }
 
     WxeStep IExecutionStateContext.CurrentStep

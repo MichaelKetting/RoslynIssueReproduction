@@ -7,6 +7,8 @@
 <body>
   <form id="ThisForm" runat="server">
     <h1>Test Sub Form</h1>
+    <a href="WxeHandler.ashx?WxeFunctionType=WebApplication.TestRootFunction,WebApplication">Launch Test Page</a>
+    <br/>
     <asp:LinkButton runat="server">Do Postback</asp:LinkButton>
     <br/>
     Note that the browser should remain on "Test Sub Form". With the Roslyn bug, the browser will return to the "Test Root Form" upon executing the postback.

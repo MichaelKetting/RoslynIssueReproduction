@@ -6,7 +6,9 @@
 </head>
 <body>
   <form id="ThisForm" runat="server">
-<h1>Test Root Form</h1>
+    <h1>Test Root Form</h1>
+    <a href="WxeHandler.ashx?WxeFunctionType=WebApplication.TestRootFunction,WebApplication">Launch Test Page</a>
+    <br/>
     <test:TestLinkButton runat="server" Text="Open Sub Form"/>
   </form>
 </body>

@@ -17,16 +17,11 @@
 using System;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Linq;
-using System.Text;
 using System.Web;
-using System.Web.UI;
 using Remotion.Utilities;
-using Remotion.Web.Utilities;
 
 namespace Remotion.Web.ExecutionEngine
 {
-
   public class WxeContext
   {
     public static WxeContext Current
@@ -40,20 +35,16 @@ namespace Remotion.Web.ExecutionEngine
       System.Web.HttpContext.Current.Items["WxeContext"] = value;
     }
 
-
     private readonly HttpContextBase _httpContext;
-    private readonly WxeFunctionStateManager _functionStateManager;
     private readonly WxeFunctionState _functionState;
     private readonly NameValueCollection _queryString;
 
-    public WxeContext (HttpContextBase context, WxeFunctionStateManager functionStateManager, WxeFunctionState functionState, NameValueCollection queryString)
+    public WxeContext (HttpContextBase context, WxeFunctionState functionState, NameValueCollection queryString)
     {
       ArgumentUtility.CheckNotNull ("context", context);
-      ArgumentUtility.CheckNotNull ("functionStateManager", functionStateManager);
       ArgumentUtility.CheckNotNull ("functionState", functionState);
 
       _httpContext = context;
-      _functionStateManager = functionStateManager;
 
       _functionState = functionState;
 
@@ -73,16 +64,6 @@ namespace Remotion.Web.ExecutionEngine
       get { return _httpContext; }
     }
 
-    public WxeFunctionStateManager FunctionStateManager
-    {
-      get { return _functionStateManager; }
-    }
-
-    protected WxeFunctionState FunctionState
-    {
-      get { return _functionState; }
-    }
-
     public string FunctionToken
     {
       get { return _functionState.FunctionToken; }
@@ -97,69 +78,5 @@ namespace Remotion.Web.ExecutionEngine
     {
       get { return _queryString; }
     }
-
-    /// <summary> Gets the URL that resumes the current function. </summary>
-    /// <remarks>
-    ///   If a WXE application branches to an external web site, the external site can
-    ///   link back to this URL to resume the current function at the point where 
-    ///   it was interrupted. Note that if the user stays on the external site longer
-    ///   that the session or function timeout, resuming will fail with a timeout
-    ///   exception.
-    /// </remarks>
-    public string GetResumeUrl (bool includeServer)
-    {
-      string pathPart = GetPath (_httpContext.Request.Url.AbsolutePath, FunctionToken, QueryString);
-      if (includeServer)
-        throw new NotImplementedException();
-      else
-        return pathPart;
-    }
-
-    /// <summary> Gets the absolute path to the WXE handler used for the current function. </summary>
-    /// <param name="queryString"> An optional list of URL parameters to be appended to the path. </param>
-    protected internal string GetPath (NameValueCollection queryString)
-    {
-      if (queryString == null)
-        queryString = new NameValueCollection ();
-
-      string path = _httpContext.Response.ApplyAppPathModifier (_httpContext.Request.Url.AbsolutePath);
-      return UrlUtility.AddParameters (path, queryString, _httpContext.Response.ContentEncoding);
-    }
-
-    /// <summary> Gets the absolute path that resumes the function with specified token. </summary>
-    /// <param name="functionToken"> 
-    ///   The function token of the function to resume. Must not be <see langword="null"/> or emtpy.
-    /// </param>
-    /// <param name="queryString"> An optional list of URL parameters to be appended to the path. </param>
-    protected internal string GetPath (string functionToken, NameValueCollection queryString)
-    {
-      return GetPath (_httpContext.Request.Url.AbsolutePath, functionToken, queryString);
-    }
-
-    /// <summary> Gets the absolute path that resumes the function with specified token. </summary>
-    /// <param name="path"> The path to the <see cref="WxeHandler"/>. Must not be <see langword="null"/> or emtpy. </param>
-    /// <param name="functionToken"> 
-    ///   The function token of the function to resume. Must not be <see langword="null"/> or emtpy.
-    /// </param>
-    /// <param name="queryString"> An optional list of URL parameters to be appended to the <paramref name="path"/>. </param>
-    private string GetPath (string path, string functionToken, NameValueCollection queryString)
-    {
-      ArgumentUtility.CheckNotNullOrEmpty ("path", path);
-      ArgumentUtility.CheckNotNullOrEmpty ("functionToken", functionToken);
-
-      if (path.IndexOf ("?") != -1)
-        throw new ArgumentException ("The path must be provided without a query string. Use the query string parameter instead.", "path");
-
-      if (queryString == null)
-        queryString = new NameValueCollection ();
-      else
-        queryString = new NameValueCollection (queryString);
-
-      queryString.Set (WxeHandler.Parameters.WxeFunctionToken, functionToken);
-
-      path = UrlUtility.GetAbsoluteUrl (_httpContext, path);
-      return UrlUtility.AddParameters (path, queryString, _httpContext.Response.ContentEncoding);
-    }
   }
-
 }

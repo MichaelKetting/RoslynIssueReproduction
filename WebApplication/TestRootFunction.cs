@@ -6,10 +6,8 @@ namespace WebApplication
   public class TestRootFunction : TestBaseFunction
   {
     public TestRootFunction ()
+      : base (new WxePageStep ("TestRootForm.aspx"))
     {
     }
-
-    private WxePageStep Step1 = new WxePageStep ("TestRootForm.aspx");
-
   }
 }

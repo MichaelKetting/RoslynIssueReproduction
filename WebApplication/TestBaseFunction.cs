@@ -7,8 +7,8 @@ namespace WebApplication
 {
   public abstract class TestBaseFunction : WxeFunction
   {
-    public TestBaseFunction ()
-        : base (WxeTransactionMode<TestTransactionFactory>.None)
+    public TestBaseFunction (WxePageStep pageStep)
+        : base (pageStep)
     {
     }
 

@@ -17,7 +17,7 @@ namespace WebApplication
 
       if (!page.IsReturningPostBack)
       {
-        ((IWxePage) page).ExecuteFunction (new TestSubFunction(), new WxeCallArguments (this, new WxeCallOptions()));
+        page.ExecuteFunction (new TestSubFunction(), this);
       }
     }
 

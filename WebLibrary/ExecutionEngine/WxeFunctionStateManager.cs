@@ -129,8 +129,6 @@ namespace Remotion.Web.ExecutionEngine
     public void Add (WxeFunctionState functionState)
     {
       ArgumentUtility.CheckNotNull ("functionState", functionState);
-      if (functionState.IsAborted)
-        throw new ArgumentException ("An aborted WxeFunctionState cannot be added to the collection.", "functionState");
 
       lock (_lockObject)
       {
@@ -198,8 +196,6 @@ namespace Remotion.Web.ExecutionEngine
       lock (_lockObject)
       {
         Remove (functionState.FunctionToken);
-        // WxeFunctionState is not threadsafe, thus locking the abort at this point is good practice
-        functionState.Abort();
       }
     }
 
@@ -214,17 +210,6 @@ namespace Remotion.Web.ExecutionEngine
           return functionStateMetaData.LastAccess.AddMinutes (functionStateMetaData.Lifetime) < DateTime.Now;
 
         return true;
-      }
-    }
-
-    public DateTime GetLastAccess (string functionToken)
-    {
-      ArgumentUtility.CheckNotNullOrEmpty ("functionToken", functionToken);
-      lock (_lockObject)
-      {
-        CheckFunctionTokenExists (functionToken);
-
-        return _functionStates[functionToken].LastAccess;
       }
     }
 

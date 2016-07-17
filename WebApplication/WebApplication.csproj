@@ -58,7 +58,6 @@
     <Content Include="Default.htm" />
     <Content Include="TestRootForm.aspx" />
     <Content Include="TestSubForm.aspx" />
-    <Content Include="UrlMapping.xml" />
     <Content Include="Web.config" />
   </ItemGroup>
   <ItemGroup>
@@ -81,7 +80,6 @@
       <DependentUpon>TestSubForm.aspx</DependentUpon>
     </Compile>
     <Compile Include="TestSubFunction.cs" />
-    <Compile Include="TestTransactionFactory.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\WebLibrary\WebLibrary.csproj">

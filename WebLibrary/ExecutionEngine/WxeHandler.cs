@@ -16,121 +16,40 @@
 // 
 using System;
 using System.ComponentModel;
-using System.IO;
 using System.Web;
-using System.Web.Configuration;
 using System.Web.SessionState;
 using Remotion.Utilities;
-using VirtualPathUtility = System.Web.VirtualPathUtility;
 
 namespace Remotion.Web.ExecutionEngine
 {
-  /// <summary> 
-  ///   The <see cref="IHttpHandler"/> implementation responsible for handling requests to the 
-  ///   <b>Web Execution Engine.</b>
-  /// </summary>
-  /// <include file='..\doc\include\ExecutionEngine\WxeHandler.xml' path='WxeHandler/Class/*' />
   public class WxeHandler : IHttpHandler, IRequiresSessionState
   {
-    /// <summary> Contains a list of parameters supported by the <see cref="WxeHandler"/>. </summary>
-    /// <remarks> 
-    ///   The available parameters are <see cref="WxeFunctionType"/>, <see cref="WxeFunctionToken"/>,
-    ///   <see cref="ReturnUrl"/>, and <see cref="WxeAction"/>.
-    /// </remarks>
     public class Parameters
     {
-      /// <summary> Denotes the type of the <see cref="WxeFunction"/> to initialize. </summary>
-      /// <remarks> 
-      ///     The argument may be presented as a regular .net Type string or the abbreviated version as specified in
-      ///     <see cref="TypeUtility.ParseAbbreviatedTypeName"/>.
-      /// </remarks>
       public static readonly string WxeFunctionType = "WxeFunctionType";
 
       /// <summary> Denotes the <b>ID</b> of the <see cref="WxeFunction"/> to be resumed. </summary>
       public static readonly string WxeFunctionToken = "WxeFunctionToken";
-
-      /// <summary> Denotes the <b>URL</b> to return to after the function has completed. </summary>
-      /// <remarks>   
-      ///   Only evaluated during initialization. Replaces the <see cref="WxeFunction.ReturnUrl"/> defined by the 
-      ///   function it self. 
-      /// </remarks>
-      public static readonly string ReturnUrl = "ReturnUrl";
-
-      /// <summary> Denotes a special action to be executed. </summary>
-      /// <remarks> See the <see cref="Actions"/> type for a list of supported arguments. </remarks>
-      public static readonly string WxeAction = "WxeAction";
-
-      /// <summary> Denotes whether to the function should restart after it has completed. </summary>
-      /// <remarks>   
-      ///   Only evaluated during initialization. Replaces the <see cref="WxeFunction.ReturnUrl"/> defined by the 
-      ///   function it self. Will be overruled by an explicitly specified <see cref="ReturnUrl"/>.
-      /// </remarks>
-      public static readonly string WxeReturnToSelf = "WxeReturnToSelf";
     }
 
-    /// <summary> Denotes the arguments supported for the <see cref="Parameters.WxeAction"/> parameter. </summary>
-    /// <remarks> The available actions are <see cref="Refresh"/> and <see cref="Abort"/>. </remarks>
-    public class Actions
-    {
-      /// <summary> Denotes a session refresh. </summary>
-      public static readonly string Refresh = "Refresh";
-
-      /// <summary> Denotes a session abort. </summary>
-      public static readonly string Abort = "Abort";
-
-      /// <summary> Denotes a session abort. (Obsolete) </summary>
-      public static readonly string Cancel = "Cancel";
-    }
-
-
-    private const int c_httpInternalServerError = 500;
-
-    /// <summary> Gets a flag indication whether session management is enabled for the application. </summary>
-    /// <value> <see langword="true"/> if session management is enabled. </value>
-    /// <remarks> Without session management both session refreshing and session aborting are disabled. </remarks>
-    public static bool IsSessionManagementEnabled
-    {
-      get { return false; }
-    }
-
-    /// <summary> Gets a flag indication whether session refreshing is enabled for the application. </summary>
-    /// <value> <see langword="true"/> if session refreshing is enabled. </value>
-    public static bool IsSessionRefreshEnabled
-    {
-      get { return false; }
-    }
-
-    /// <summary> Gets session refresh interval for the application. </summary>
-    /// <value> The time between refresh postbacks in minutes. </value>
-    public static int RefreshInterval
-    {
-      get { return 0; }
-    }
-
-    /// <summary> The <see cref="WxeFunctionState"/> representing the <see cref="RootFunction"/> and its context. </summary>
     private WxeFunctionState _currentFunctionState;
 
-    /// <summary> The root function executed by the <b>WxeHanlder</b>. </summary>
-    /// <value> The <see cref="WxeFunction"/> invoked by the <see cref="Parameters.WxeFunctionType"/> parameter. </value>
     public WxeFunction RootFunction
     {
       get { return _currentFunctionState.Function; }
     }
 
-    /// <summary> Processes the requests associated with the <see cref="WxeHandler"/>. </summary>
-    /// <param name="context"> The <see cref="HttpContext"/> of the request. Must not be <see langword="null"/>. </param>
     [EditorBrowsable (EditorBrowsableState.Never)]
-    public virtual void ProcessRequest (HttpContext context)
+    public void ProcessRequest (HttpContext context)
     {
       ArgumentUtility.CheckNotNull ("context", context);
-      CheckTimeoutConfiguration (context);
 
       string functionToken = context.Request.Params[Parameters.WxeFunctionToken];
       bool hasFunctionToken = ! string.IsNullOrEmpty (functionToken);
 
       if (! hasFunctionToken)
       {
-        _currentFunctionState = CreateNewFunctionState (context, GetType (context));
+        _currentFunctionState = CreateNewFunctionState (GetType (context));
         ProcessFunctionState (context, _currentFunctionState, true);
       }
       else
@@ -148,107 +67,30 @@ namespace Remotion.Web.ExecutionEngine
       }
     }
 
-    /// <summary> Checks whether the timeout settings are valid. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxeHandler.xml' path='WxeHandler/CheckTimeoutConfiguration/*' />
-    protected void CheckTimeoutConfiguration (HttpContext context)
+    private WxeFunctionState CreateNewFunctionState (Type type)
     {
-      ArgumentUtility.CheckNotNull ("context", context);
-
-      if (! IsSessionManagementEnabled)
-        return;
-
-    }
-
-
-    /// <summary> Gets the <see cref="Type"/> from the information provided by the <paramref name="context"/>. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxeHandler.xml' path='WxeHandler/GetType/*' />
-    protected Type GetType (HttpContext context)
-    {
-      ArgumentUtility.CheckNotNull ("context", context);
-
-      string typeName = context.Request.Params[Parameters.WxeFunctionType];
-      return GetTypeByTypeName (typeName);
-    }
-
-    /// <summary> Gets the <see cref="Type"/> for the specified <paramref name="typeName"/>. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxeHandler.xml' path='WxeHandler/GetTypeByTypeName/*' />
-    protected Type GetTypeByTypeName (string typeName)
-    {
-      ArgumentUtility.CheckNotNullOrEmpty ("typeName", typeName);
-      try
-      {
-        var type = Type.GetType (typeName, true, ignoreCase : true);
-        if (!typeof (WxeFunction).IsAssignableFrom (type))
-        {
-          throw new WxeException (
-              string.Format ("The function type '{0}' is invalid. Wxe functions must be derived from '{1}'.", typeName, typeof (WxeFunction).FullName));
-        }
-        return type;
-      }
-      catch (TypeLoadException e)
-      {
-        throw new WxeException (string.Format ("The function type '{0}' is invalid.", typeName), e);
-      }
-      catch (FileNotFoundException e)
-      {
-        throw new WxeException (string.Format ("The function type '{0}' is invalid.", typeName), e);
-      }
-    }
-
-
-    /// <summary> Initializes a new <see cref="WxeFunction"/>, encapsulated in a <see cref="WxeFunctionState"/> object. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxeHandler.xml' path='WxeHandler/CreateNewFunctionState/*' />
-    protected WxeFunctionState CreateNewFunctionState (HttpContext context, Type type)
-    {
-      ArgumentUtility.CheckNotNull ("context", context);
-      ArgumentUtility.CheckNotNull ("type", type);
-
       WxeFunctionStateManager functionStates = WxeFunctionStateManager.Current;
       functionStates.CleanUpExpired();
 
       WxeFunction function = (WxeFunction) Activator.CreateInstance (type);
 
-      WxeFunctionState functionState = new WxeFunctionState (function, true);
+      WxeFunctionState functionState = new WxeFunctionState (function);
       functionStates.Add (functionState);
-
-      string returnUrlArg = context.Request.QueryString[Parameters.ReturnUrl];
-      string returnToSelfArg = context.Request.QueryString[Parameters.WxeReturnToSelf];
-      if (! string.IsNullOrEmpty (returnUrlArg))
-      {
-        function.ReturnUrl = returnUrlArg;
-      }
-      else if (! string.IsNullOrEmpty (returnToSelfArg))
-      {
-        if (bool.Parse (returnToSelfArg))
-          function.ReturnUrl = context.Request.RawUrl;
-      }
 
       return functionState;
     }
 
-    /// <summary> Resumes an existing <see cref="WxeFunction"/>. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxeHandler.xml' path='WxeHandler/ResumeExistingFunctionState/*' />
-    protected WxeFunctionState ResumeExistingFunctionState (HttpContext context, string functionToken)
+    private WxeFunctionState ResumeExistingFunctionState (HttpContext context, string functionToken)
     {
-      ArgumentUtility.CheckNotNull ("context", context);
-      ArgumentUtility.CheckNotNullOrEmpty ("functionToken", functionToken);
-
-      bool isPostRequest = string.Compare (context.Request.HttpMethod, "POST", true) == 0;
+      bool isPostRequest = string.Equals (context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase);
 
       if (! WxeFunctionStateManager.HasSession)
       {
         if (isPostRequest)
         {
-          throw new WxeTimeoutException ("Session timeout.", functionToken); // TODO: display error message
+          throw new HttpException (500, "Session timeout.");
         }
-        try
-        {
-          return CreateNewFunctionState (context, GetType (context));
-        }
-        catch (WxeException e)
-        {
-          throw new WxeTimeoutException ("Session timeout.", functionToken, e); // TODO: display error message
-        }
+        return CreateNewFunctionState (GetType (context));
       }
 
       WxeFunctionStateManager functionStateManager = WxeFunctionStateManager.Current;
@@ -256,112 +98,39 @@ namespace Remotion.Web.ExecutionEngine
       {
         if (isPostRequest)
         {
-          throw new WxeTimeoutException ("Function Timeout.", functionToken); // TODO: display error message
+          throw new HttpException (500, "Function timeout.");
         }
-        try
-        {
-          return CreateNewFunctionState (context, GetType (context));
-        }
-        catch (WxeException e)
-        {
-          throw new WxeTimeoutException ("Function Timeout.", functionToken, e); // TODO: display error message
-        }
+        return CreateNewFunctionState (GetType (context));
       }
 
       WxeFunctionState functionState = functionStateManager.GetItem (functionToken);
-      if (functionState.IsAborted)
-      {
-        throw new InvalidOperationException (string.Format ("WxeFunctionState {0} is aborted.", functionState.FunctionToken));
-            // TODO: display error message
-      }
 
       functionStateManager.Touch (functionToken);
       functionStateManager.CleanUpExpired();
       if (functionState.Function == null)
-        throw new WxeException (string.Format ("Function missing in WxeFunctionState {0}.", functionState.FunctionToken));
+        throw new HttpException (string.Format ("Function missing in WxeFunctionState {0}.", functionState.FunctionToken));
       return functionState;
     }
 
-    /// <summary> Redirects the <see cref="HttpContext.Response"/> to an optional <see cref="WxeFunction.ReturnUrl"/>. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxeHandler.xml' path='WxeHandler/ProcessFunctionState/*' />
-    protected void ProcessFunctionState (HttpContext context, WxeFunctionState functionState, bool isNewFunction)
+    private void ProcessFunctionState (HttpContext context, WxeFunctionState functionState, bool isNewFunction)
     {
-      ArgumentUtility.CheckNotNull ("context", context);
-      ArgumentUtility.CheckNotNull ("functionState", functionState);
-
-      ExecuteFunctionState (context, functionState, isNewFunction);
-
-      //  This point is only reached after the WxeFunction has completed execution.
-
-      string returnUrl = functionState.Function.ReturnUrl;
-      string executionCompletedScript = functionState.Function.ExecutionCompletedScript;
-
-      CleanUpFunctionState (functionState);
-
-      if (! string.IsNullOrEmpty (executionCompletedScript))
-        ProcessExecutionCompletedScript (context, executionCompletedScript);
-      else if (! string.IsNullOrEmpty (returnUrl))
-        ProcessReturnUrl (context, returnUrl);
-    }
-
-    /// <summary> 
-    ///   Sets the current <see cref="WxeContext"/> and invokes <see cref="ExecuteFunction"/> on the
-    ///   <paramref name="functionState"/>'s <see cref="WxeFunctionState.Function"/>.
-    /// </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxeHandler.xml' path='WxeHandler/ExecuteFunctionState/*' />
-    protected void ExecuteFunctionState (HttpContext context, WxeFunctionState functionState, bool isNewFunction)
-    {
-      ArgumentUtility.CheckNotNull ("context", context);
-      ArgumentUtility.CheckNotNull ("functionState", functionState);
-      if (functionState.IsAborted)
-        throw new ArgumentException ("The function state " + functionState.FunctionToken + " is aborted.");
-
-      WxeContext wxeContext = new WxeContext (new HttpContextWrapper (context), WxeFunctionStateManager.Current, functionState, context.Request.QueryString);
+      WxeContext wxeContext = new WxeContext (new HttpContextWrapper (context), functionState, context.Request.QueryString);
       WxeContext.SetCurrent (wxeContext);
 
       functionState.PostBackID++;
-      ExecuteFunction (functionState.Function, wxeContext, isNewFunction);
-    }
+      functionState.Function.Execute (wxeContext);
 
-    /// <summary>  Invokes <see cref="WxeFunction.Execute(WxeContext)"/> on the <paramref name="function"/>. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxeHandler.xml' path='WxeHandler/ExecuteFunction/*' />
-    protected virtual void ExecuteFunction (WxeFunction function, WxeContext context, bool isNew)
-    {
-      ArgumentUtility.CheckNotNull ("function", function);
-      ArgumentUtility.CheckNotNull ("context", context);
-      if (function.IsAborted)
-        throw new ArgumentException ("The function " + function.GetType().FullName + " is aborted.");
-
-      function.ExceptionHandler.AppendCatchExceptionTypes (typeof (WxeUserCancelException));
-      function.Execute (context);
-    }
-
-    /// <summary> Aborts the <paramref name="functionState"/> after its function has executed. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxeHandler.xml' path='WxeHandler/CleanUpFunctionState/*' />
-    protected void CleanUpFunctionState (WxeFunctionState functionState)
-    {
-      ArgumentUtility.CheckNotNull ("functionState", functionState);
+      //  This point is only reached after the WxeFunction has completed execution.
 
       bool isRootFunction = functionState.Function == functionState.Function.RootFunction;
-      if (functionState.IsCleanUpEnabled && isRootFunction)
+      if (isRootFunction)
         WxeFunctionStateManager.Current.Abort (functionState);
     }
 
-    /// <summary> Redirects the <see cref="HttpContext.Response"/> to an optional <see cref="WxeFunction.ReturnUrl"/>. </summary>
-    /// <include file='..\doc\include\ExecutionEngine\WxeHandler.xml' path='WxeHandler/ProcessReturnUrl/*' />
-    protected void ProcessReturnUrl (HttpContext context, string returnUrl)
+    private Type GetType (HttpContext context)
     {
-      ArgumentUtility.CheckNotNull ("context", context);
-      ArgumentUtility.CheckNotNullOrEmpty ("returnUrl", returnUrl);
-
-      context.Response.Redirect (returnUrl, true);
-    }
-
-    private void ProcessExecutionCompletedScript (HttpContext context, string script)
-    {
-      context.Response.Clear();
-      context.Response.Write ("<html><script language=\"JavaScript\">" + script + "</script></html>");
-      context.Response.End();
+      string typeName = context.Request.Params[Parameters.WxeFunctionType];
+      return Type.GetType (typeName, throwOnError: true, ignoreCase : false);
     }
 
     bool IHttpHandler.IsReusable

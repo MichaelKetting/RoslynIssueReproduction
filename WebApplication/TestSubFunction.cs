@@ -6,9 +6,8 @@ namespace WebApplication
   public class TestSubFunction : TestBaseFunction
   {
     public TestSubFunction ()
+        : base (new WxePageStep ("TestSubForm.aspx"))
     {
     }
-
-    private WxePageStep Step1 = new WxePageStep ("TestSubForm.aspx");
   }
 }
