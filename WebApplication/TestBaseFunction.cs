@@ -20,6 +20,7 @@ namespace WebApplication
       }
       catch (ThreadAbortException)
       {
+        // re-throw is missing, with C# 6 and .NET 4.5, the exception will not get re-thrown if there is a finally-block after this catch-block.
       }
       finally
       {
